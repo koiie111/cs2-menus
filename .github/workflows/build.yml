@@ -1,81 +1,149 @@
-name: Build AMBuild Plugin
+name: Build for Metamod release
 
 on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      metamod_tag:
+        description: 'Metamod release tag (empty = latest 2.0 release)'
+        required: false
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
-  release:
-    types:
-      - created
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: metamod-release
+  cancel-in-progress: false
 
 jobs:
   build:
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
-    permissions:
-      contents: write
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/pisex/ubuntu20:latest
-
     env:
-      HL2SDK_ROOT: "${{ github.workspace }}/external"
-      MMS_PATH: "${{ github.workspace }}/external/metamod-source"
-      MANIFEST_PATH: "${{ github.workspace }}/external/metamod-source/hl2sdk-manifests"
-
+      HL2SDK_ROOT: ${{ github.workspace }}/external
+      MMS_PATH: ${{ github.workspace }}/external/metamod-source
+      MANIFEST_PATH: ${{ github.workspace }}/external/metamod-source/hl2sdk-manifests
     steps:
-      - name: Generate build number
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        id: buildnumber
-        uses: onyxmueller/build-tag-number@v1
-        with:
-          token: ${{secrets.github_token}}
+      - uses: actions/checkout@v4
 
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Install Python for release lookup
+        run: |
+          apt-get update -qy
+          apt-get install -y python3
+
+      - name: Select Metamod release
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.metamod_tag }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.error, urllib.request
+          headers = {'Accept': 'application/vnd.github+json', 'User-Agent': 'cs2-menus-build'}
+          req = urllib.request.Request('https://api.github.com/repos/alliedmodders/metamod-source/releases?per_page=100', headers=headers)
+          with urllib.request.urlopen(req) as response:
+              releases = json.load(response)
+          requested = os.environ.get('REQUESTED_TAG', '')
+          tags = [r['tag_name'] for r in releases if not r['draft'] and r['tag_name'].startswith('2.0.0.')]
+          if requested:
+              if requested not in tags:
+                  raise SystemExit(f'Metamod release not found: {requested}')
+              tag = requested
+          else:
+              if not tags:
+                  raise SystemExit('No Metamod 2.0 releases found')
+              tag = max(tags, key=lambda value: tuple(map(int, value.split('.'))))
+          own_tag = f'metamod-{tag}'
+          url = f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/releases/tags/{own_tag}'
+          req = urllib.request.Request(url, headers={**headers, 'Authorization': 'Bearer ' + os.environ['GH_TOKEN']})
+          try:
+              urllib.request.urlopen(req).close()
+              exists = True
+          except urllib.error.HTTPError as error:
+              if error.code != 404:
+                  raise
+              exists = False
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write(f'metamod_tag={tag}\nrelease_tag={own_tag}\nbuild_needed={str(not exists or os.environ["GITHUB_EVENT_NAME"] != "schedule").lower()}\n')
+          print(f'Metamod {tag}; release exists: {exists}')
+          PY
 
       - name: Set up dependencies
+        if: steps.version.outputs.build_needed == 'true'
         run: |
+          set -eu
           export DEBIAN_FRONTEND=noninteractive
           apt-get update -qy
           apt-get install -y git clang-10 clang++-10 binutils python3 python3-pip zip
-
           python3 -m pip install --upgrade pip importlib-metadata
           python3 -m pip install setuptools==45.2.0
-
           git clone https://github.com/alliedmodders/ambuild.git ambuild
-          cd ambuild
-          pip3 install .
-          cd ..
-
+          pip3 install ./ambuild
           mkdir -p external
-          cd external
-          git clone --recursive --branch master --single-branch \
-            https://github.com/alliedmodders/metamod-source.git
-          git clone --recursive --branch cs2 --single-branch \
-            https://github.com/alliedmodders/hl2sdk.git hl2sdk-cs2
-            
-          cd ../..
+          git clone --depth 1 --branch '${{ steps.version.outputs.metamod_tag }}' https://github.com/alliedmodders/metamod-source.git "$MMS_PATH"
+          git -C "$MMS_PATH" submodule update --init --depth 1 third_party/khook third_party/amtl hl2sdk-manifests
+          git init -q "$HL2SDK_ROOT/hl2sdk-cs2"
+          git -C "$HL2SDK_ROOT/hl2sdk-cs2" remote add origin https://github.com/alliedmodders/hl2sdk.git
+          git -C "$HL2SDK_ROOT/hl2sdk-cs2" fetch -q --depth 1 origin 625bfd4e39816ad0e1eae3b3144a3b5425c5c7a0
+          git -C "$HL2SDK_ROOT/hl2sdk-cs2" checkout -q FETCH_HEAD
+          git clone https://github.com/pisex/SchemaEntity.git "$GITHUB_WORKSPACE/../SchemaEntity"
+          git -C "$GITHUB_WORKSPACE/../SchemaEntity" checkout -q e7965b3c83ec684d44584ee6457c5482ee5d9db1
+          bash .github/patch_schemaentity.sh "$GITHUB_WORKSPACE/../SchemaEntity"
 
-          git clone https://github.com/pisex/SchemaEntity.git
-          
       - name: Configure and build plugin
+        if: steps.version.outputs.build_needed == 'true'
         run: |
+          set -euo pipefail
           mkdir build
           cd build
-          python3 ../configure.py -s cs2 --targets x86_64 --enable-optimize --hl2sdk-manifests=./hl2sdk-manifests --mms_path=$MMS_PATH --hl2sdk-root=$HL2SDK_ROOT
-          ambuild
+          python3 ../configure.py -s cs2 --targets x86_64 --enable-optimize --hl2sdk-manifests="$MANIFEST_PATH" --mms_path="$MMS_PATH" --hl2sdk-root="$HL2SDK_ROOT"
+          ambuild --jobs=4
 
-      - name: Package addon into ZIP
+      - name: Package release assets
+        if: steps.version.outputs.build_needed == 'true'
         run: |
-          cd build/package/addons
-          zip -r "${{ github.event.repository.name }}.zip" .
-          mv "${{ github.event.repository.name }}.zip" "${GITHUB_WORKSPACE}/"
+          set -eu
+          mkdir -p dist
+          (cd build/package/addons && zip -r "$GITHUB_WORKSPACE/dist/utils.zip" .)
+          zip -r dist/custom_menu.zip custom_menu
+          zip -r dist/menu_buttons.zip menu_buttons
+          python3 - <<'PY'
+          import zipfile
+          expected = {
+              'utils.zip': ['configs/core.cfg', 'configs/signatures.ini', 'configs/precacher.ini', 'metamod/utils.vdf', 'translations/menus.phrases.txt', 'utils/utils.so'],
+              'custom_menu.zip': ['custom_menu/panorama/layout/custom_game/menu_ui.xml', 'custom_menu/panorama/styles/custom_game/ui.css'],
+              'menu_buttons.zip': ['menu_buttons/info.txt', 'menu_buttons/workshop/install.txt'],
+          }
+          for archive, required in expected.items():
+              with zipfile.ZipFile('dist/' + archive) as zf:
+                  missing = set(required) - set(zf.namelist())
+                  if missing:
+                      raise SystemExit(f'{archive} missing: {sorted(missing)}')
+          PY
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+      - name: Upload build artifact
+        if: steps.version.outputs.build_needed == 'true'
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.event.head_commit.message }}
-          files: ${{ github.workspace }}/${{ github.event.repository.name }}.zip
+          name: cs2-menus-${{ steps.version.outputs.metamod_tag }}
+          path: dist/*.zip
+
+      - name: Publish release
+        if: steps.version.outputs.build_needed == 'true' && github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.release_tag }}
+          name: CS2 Menus 1.8.7 for Metamod ${{ steps.version.outputs.metamod_tag }}
+          body: |
+            CS2 Menus 1.8.7 built for Metamod:Source ${{ steps.version.outputs.metamod_tag }}.
+            This compatibility build predates the 1.9.1 HUD layout features.
+          files: |
+            dist/utils.zip
+            dist/custom_menu.zip
+            dist/menu_buttons.zip
