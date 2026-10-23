@@ -91,7 +91,9 @@ jobs:
           git -C "$MMS_PATH" submodule update --init --depth 1 third_party/khook third_party/amtl hl2sdk-manifests
           git init -q "$HL2SDK_ROOT/hl2sdk-cs2"
           git -C "$HL2SDK_ROOT/hl2sdk-cs2" remote add origin https://github.com/alliedmodders/hl2sdk.git
-          git -C "$HL2SDK_ROOT/hl2sdk-cs2" fetch -q --depth 1 origin 625bfd4e39816ad0e1eae3b3144a3b5425c5c7a0
+          # CS2 1.41.9.2 added an IVEngineServer2 virtual method. This SDK
+          # backports only that slot so globals, auth and engine calls stay aligned.
+          git -C "$HL2SDK_ROOT/hl2sdk-cs2" fetch -q --depth 1 origin 7d51bfdae400b506b5288e4d42e31c3e827c599c
           git -C "$HL2SDK_ROOT/hl2sdk-cs2" checkout -q FETCH_HEAD
           git clone https://github.com/pisex/SchemaEntity.git "$GITHUB_WORKSPACE/../SchemaEntity"
           git -C "$GITHUB_WORKSPACE/../SchemaEntity" checkout -q e7965b3c83ec684d44584ee6457c5482ee5d9db1
