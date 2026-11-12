@@ -12,7 +12,7 @@ byte signature. Detours are uninstalled before destroying their trampolines.
 
 Build dependencies used for the Linux release:
 
-- HL2SDK cs2: `81020d1a26b9d4321b9f030c96929ec18e8c0cff`
+- [AlliedModders S2SDK](https://github.com/alliedmodders/s2sdk) (folder `hl2sdk-cs2`): `81020d1a26b9d4321b9f030c96929ec18e8c0cff`
 - Metamod: `170058a2f0dbd58106b7c76bfe88a94672295356`
 - SchemaEntity: `e7965b3c83ec684d44584ee6457c5482ee5d9db1`, plus
   `patches/schema-14197.patch` from this repository

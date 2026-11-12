@@ -89,7 +89,7 @@ jobs:
           git clone --depth 1 --branch '${{ steps.version.outputs.metamod_tag }}' https://github.com/alliedmodders/metamod-source.git "$MMS_PATH"
           git -C "$MMS_PATH" submodule update --init --depth 1 third_party/khook third_party/amtl hl2sdk-manifests
           git init -q "$HL2SDK_ROOT/hl2sdk-cs2"
-          git -C "$HL2SDK_ROOT/hl2sdk-cs2" remote add origin https://github.com/alliedmodders/hl2sdk.git
+          git -C "$HL2SDK_ROOT/hl2sdk-cs2" remote add origin https://github.com/alliedmodders/s2sdk.git
           git -C "$HL2SDK_ROOT/hl2sdk-cs2" fetch -q --depth 1 origin 81020d1a26b9d4321b9f030c96929ec18e8c0cff
           git -C "$HL2SDK_ROOT/hl2sdk-cs2" checkout -q FETCH_HEAD
           git clone https://github.com/pisex/SchemaEntity.git "$GITHUB_WORKSPACE/../SchemaEntity"
