@@ -1,1 +1,4 @@
 .github/*.sh text eol=lf
+
+# Unified diff context intentionally retains source indentation and line endings.
+*.patch -whitespace
