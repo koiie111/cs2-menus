@@ -22,7 +22,9 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:22.04
     env:
       CC: clang-14
       CXX: clang++-14
@@ -30,11 +32,12 @@ jobs:
       MMS_PATH: ${{ github.workspace }}/external/metamod-source
       MANIFEST_PATH: ${{ github.workspace }}/external/metamod-source/hl2sdk-manifests
     steps:
+      - name: Install pinned Linux build toolchain
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qy
+          apt-get install -y ca-certificates git clang-14 g++-11 binutils python3 python3-pip zip
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
 
       - name: Select Metamod release
         id: version
@@ -79,8 +82,6 @@ jobs:
         run: |
           set -eu
           export DEBIAN_FRONTEND=noninteractive
-          sudo apt-get update -qy
-          sudo apt-get install -y git clang-14 binutils python3 python3-pip zip
           python3 -m pip install --upgrade pip importlib-metadata
           python3 -m pip install --upgrade setuptools
           git clone https://github.com/alliedmodders/ambuild.git ambuild

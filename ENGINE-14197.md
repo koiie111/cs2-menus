@@ -16,7 +16,7 @@ Build dependencies used for the Linux release:
 - Metamod: `170058a2f0dbd58106b7c76bfe88a94672295356`
 - SchemaEntity: `e7965b3c83ec684d44584ee6457c5482ee5d9db1`, plus
   `patches/schema-14197.patch` from this repository
-- AMBuild 2.2, Clang 14, Linux x86_64, C++20
+- AMBuild 2.2, Clang 14 with Ubuntu 22.04 / GCC 11 headers, Linux x86_64, C++20
 
 Place SchemaEntity next to this repository, then apply the dependency patch:
 
