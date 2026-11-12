@@ -1,13 +1,13 @@
-## Metamod 2.0 compatibility build
+## CS2 1.41.9.7 / Metamod 2.0 compatibility build
 
-This fork currently builds the 1.8.7 plugin API with KHook for Metamod:Source 2.0.
+This fork builds GameUtils 1.8.7-14197 with the 1.8.7 plugin API and KHook for Metamod:Source 2.0. See [ENGINE-14197.md](ENGINE-14197.md) for the network ABI repair, exact dependencies and validation.
 It does not include the HUD layout features introduced in upstream 1.9.0/1.9.1.
 The KHook and SDK compatibility changes were adapted from
 [elnononono/cs2-menus](https://github.com/elnononono/cs2-menus).
 
 GitHub Actions checks for a new Metamod 2.0 release every six hours and can also
 be started manually with a `metamod_tag`. A successful build publishes a release
-named `metamod-<version>` with `utils.zip`, `custom_menu.zip` and
+named `gameutils-1.8.7-14197-metamod-<version>` with `utils.zip`, `custom_menu.zip` and
 `menu_buttons.zip`. The `utils.zip` archive contains `utils/utils.so`,
 `metamod/utils.vdf`, `configs/`, and `translations/`. The signatures in
 `configs/signatures.ini` come from the Metamod 2.0 compatible port and should be

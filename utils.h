@@ -2,11 +2,18 @@
 #define _INCLUDE_METAMOD_SOURCE_STUB_PLUGIN_H_
 
 #include <ISmmPlugin.h>
-#include <eiface.h>
-#include <icvar.h>
+#include <khook.hpp>
+#include <engine2/serversideclientbase.h>
+#include <memory>
+
 #include "utlvector.h"
 #include "ehandle.h"
-#include <iserver.h>
+#include <engine2/isource2server.h>
+#include <engine2/networkgameserverbase.h>
+#include <engine2/igameresourceservice.h>
+#include <engine2/inetworkserverservice.h>
+#include <engine2/ivengineserver2.h>
+#include <filesystem/ifilesystem.h>
 #include <entity2/entitysystem.h>
 #include <steam/steam_gameserver.h>
 #include "irecipientfilter.h"
@@ -17,12 +24,12 @@
 #include <functional>
 #include "utils.hpp"
 #include <utlstring.h>
-#include <KeyValues.h>
+#include <tier0/keyvalues.h>
 #include "CCSPlayerController.h"
-#include "igameeventsystem.h"
+#include "engine2/igameeventsystem.h"
 #include <networksystem/inetworkserializer.h>
 #include <networksystem/inetworkmessages.h>
-#include <networksystem/netmessage.h>
+
 #include "usermessages.pb.h"
 #include "CGameRules.h"
 #include "module.h"
@@ -38,16 +45,13 @@
 
 class CPhysicsQuery;
 
-// The SDK only forward declares it, KHook needs a complete type to size StartupServer's arguments
-class GameSessionConfiguration_t { };
-
 class CRecipientFilter : public IRecipientFilter
 {
 public:
 	CRecipientFilter(NetChannelBufType_t nBufType = BUF_RELIABLE, bool bInitMessage = false) :
-		m_nBufType(nBufType), m_nPredictedByPlayerSlot(-1), m_bInitMessage(bInitMessage) {}
+		m_nBufType(nBufType), m_bInitMessage(bInitMessage) {}
 
-	CRecipientFilter(IRecipientFilter* source, int exceptSlot = -1) : m_nPredictedByPlayerSlot(-1)
+	CRecipientFilter(IRecipientFilter* source, int exceptSlot = -1)
 	{
 		m_Recipients = source->GetRecipients();
 		m_nBufType = source->GetNetworkBufType();
@@ -72,7 +76,7 @@ public:
 
 protected:
 	NetChannelBufType_t m_nBufType;
-	CPlayerSlot m_nPredictedByPlayerSlot;
+	CPlayerSlot m_nPredictedByPlayerSlot{-1};
 	bool m_bInitMessage;
 	CPlayerBitVec m_Recipients;
 };
@@ -92,12 +96,9 @@ public:
 std::map<int, std::map<std::string, CommandCallback>> ConsoleCommands;
 std::map<int, std::map<std::string, CommandCallback>> ChatCommands;
 
-class CCSPlayerPawn;
-
 class Menus final : public ISmmPlugin, public IMetamodListener
 {
 public:
-	Menus();
 	bool Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen, bool late);
 	bool Unload(char* error, size_t maxlen);
 	void AllPluginsLoaded();
@@ -115,47 +116,18 @@ private:
 	const char* GetDate();
 	const char* GetLogTag();
 
-private: // Hooks
-	// Returns true when the command was handled and the original must be skipped
+public: // Hooks
 	bool ClientCommand(CPlayerSlot slot, const CCommand &args);
 	void GameFrame(bool simulating, bool bFirstTick, bool bLastTick);
 	void StartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession*, const char*);
-	// Returns true when the command was handled and the original must be skipped
-	bool OnDispatchConCommand(ConCommandRef cmd, const CCommandContext& ctx, const CCommand& args);
+    bool OnDispatchConCommand(ConCommandRef cmd, const CCommandContext& ctx, const CCommand& args);
 	void OnClientDisconnect( CPlayerSlot slot, ENetworkDisconnectionReason reason, const char *pszName, uint64 xuid, const char *pszNetworkID );
 	void OnGameServerSteamAPIActivated();
 	void OnValidateAuthTicketHook(ValidateAuthTicketResponse_t *pResponse);
 	void Hook_OnClientConnected( CPlayerSlot slot, const char *pszName, uint64 xuid, const char *pszNetworkID, const char *pszAddress, bool bFakePlayer );
 	bool Hook_ClientConnect( CPlayerSlot slot, const char *pszName, uint64 xuid, const char *pszNetworkID, bool unk1, CBufferString *pRejectReason );
 	void Hook_ClientPutInServer( CPlayerSlot slot, char const *pszName, int type, uint64 xuid );
-	void Hook_OnTakeDamage_Alive(CCSPlayerPawn *pPawn, CTakeDamageInfoContainer *pInfoContainer);
-
-	// KHook callbacks
-	KHook::Return<void> KH_GameServerSteamAPIActivated(IServerGameDLL*);
-	KHook::Return<void> KH_GameFrame(IServerGameDLL*, bool simulating, bool bFirstTick, bool bLastTick);
-	KHook::Return<bool> KH_FireEvent(IGameEventManager2*, IGameEvent* pEvent, bool bDontBroadcast);
-	KHook::Return<void> KH_ClientCommand(IServerGameClients*, CPlayerSlot slot, const CCommand &args);
-	KHook::Return<void> KH_DispatchConCommand(ICvar*, ConCommandRef cmd, const CCommandContext& ctx, const CCommand& args);
-	KHook::Return<void> KH_StartupServer(INetworkServerService*, const GameSessionConfiguration_t& config, ISource2WorldSession* pWorldSession, const char* pszUnk);
-	KHook::Return<void> KH_ClientDisconnect(IServerGameClients*, CPlayerSlot slot, ENetworkDisconnectionReason reason, const char *pszName, uint64 xuid, const char *pszNetworkID);
-	KHook::Return<void> KH_ClientPutInServer(IServerGameClients*, CPlayerSlot slot, char const *pszName, int type, uint64 xuid);
-	KHook::Return<void> KH_OnClientConnected(IServerGameClients*, CPlayerSlot slot, const char *pszName, uint64 xuid, const char *pszNetworkID, const char *pszAddress, bool bFakePlayer);
-	KHook::Return<bool> KH_ClientConnect(IServerGameClients*, CPlayerSlot slot, const char *pszName, uint64 xuid, const char *pszNetworkID, bool unk1, CBufferString *pRejectReason);
-	KHook::Return<bool> KH_OnTakeDamage_Alive(CCSPlayerPawn* pPawn, CTakeDamageInfoContainer *pInfoContainer);
-
-	KHook::Virtual<IServerGameDLL, void> m_GameServerSteamAPIActivated;
-	KHook::Virtual<IServerGameDLL, void, bool, bool, bool> m_GameFrame;
-	KHook::Virtual<IGameEventManager2, bool, IGameEvent*, bool> m_FireEvent;
-	KHook::Virtual<IServerGameClients, void, CPlayerSlot, const CCommand&> m_ClientCommand;
-	KHook::Virtual<ICvar, void, ConCommandRef, const CCommandContext&, const CCommand&> m_DispatchConCommand;
-	KHook::Virtual<INetworkServerService, void, const GameSessionConfiguration_t&, ISource2WorldSession*, const char*> m_StartupServer;
-	KHook::Virtual<IServerGameClients, void, CPlayerSlot, ENetworkDisconnectionReason, const char*, uint64, const char*> m_ClientDisconnect;
-	KHook::Virtual<IServerGameClients, void, CPlayerSlot, char const*, int, uint64> m_ClientPutInServer;
-	KHook::Virtual<IServerGameClients, void, CPlayerSlot, const char*, uint64, const char*, const char*, bool> m_OnClientConnected;
-	KHook::Virtual<IServerGameClients, bool, CPlayerSlot, const char*, uint64, const char*, bool, CBufferString*> m_ClientConnect;
-	// Offset comes from gamedata, so it is configured at load time
-	KHook::Virtual<CCSPlayerPawn, bool, CTakeDamageInfoContainer*> m_OnTakeDamage_Alive;
-	void* m_pCCSPlayerPawnVTable = nullptr;
+	bool Hook_OnTakeDamage_Alive(CCSPlayerPawn* pPawn, CTakeDamageInfoContainer *pInfoContainer);
 };
 
 class MenusApi : public IMenusApi {

@@ -139,7 +139,7 @@ class MMSPluginConfig(object):
         '-Wno-attributes'
       ]
 
-      cxx.cxxflags += ['-std=c++17']
+      cxx.cxxflags += ['-std=c++20', '-Wno-error=deprecated-declarations']
       if (cxx.version >= 'gcc-4.0') or cxx.family == 'clang':
         cxx.cflags += ['-fvisibility=hidden']
         cxx.cxxflags += ['-fvisibility-inlines-hidden']
@@ -237,7 +237,7 @@ class MMSPluginConfig(object):
         cxx.linkflags += ['-static-libgcc']
       elif cxx.family == 'clang':
         cxx.linkflags += ['-lgcc_eh']
-      cxx.linkflags += ['-static-libstdc++']
+      cxx.linkflags += ['-static-libstdc++', '-Wl,--version-script=' + os.path.join(builder.sourcePath, 'exports.map')]
     elif cxx.target.platform == 'windows':
       cxx.defines += ['WIN32', '_WINDOWS']
 
@@ -253,6 +253,7 @@ class MMSPluginConfig(object):
     cxx.cxxincludes += [
       os.path.join(context.currentSourcePath),
       os.path.join(mms_core_path),	
+      os.path.join(mms_core_path, 'sourcehook'),
       os.path.join(self.mms_root, 'third_party', 'khook', 'include'),
     ]
 
@@ -266,8 +267,8 @@ class MMSPluginConfig(object):
       os.path.join(sdk['path'], 'entity2', 'entitysystem.cpp'),
       os.path.join(sdk['path'], 'entity2', 'entityidentity.cpp'),
       os.path.join(sdk['path'], 'entity2', 'entitykeyvalues.cpp'),
-      os.path.join(sdk['path'], 'tier1', 'convar.cpp'),
-      os.path.join(sdk['path'], 'tier1', 'keyvalues3.cpp'),
+      os.path.join(sdk['path'], 'tier0_perproject', 'convar.cpp'),
+      os.path.join(sdk['path'], 'tier0_perproject', 'keyvalues3.cpp'),
     ]
 
     SdkHelpers.configureCxx(context, binary, sdk)

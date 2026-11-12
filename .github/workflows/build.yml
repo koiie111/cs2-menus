@@ -22,20 +22,19 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/pisex/ubuntu20:latest
+    runs-on: ubuntu-24.04
     env:
+      CC: clang-14
+      CXX: clang++-14
       HL2SDK_ROOT: ${{ github.workspace }}/external
       MMS_PATH: ${{ github.workspace }}/external/metamod-source
       MANIFEST_PATH: ${{ github.workspace }}/external/metamod-source/hl2sdk-manifests
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Python for release lookup
-        run: |
-          apt-get update -qy
-          apt-get install -y python3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
       - name: Select Metamod release
         id: version
@@ -60,7 +59,7 @@ jobs:
               if not tags:
                   raise SystemExit('No Metamod 2.0 releases found')
               tag = max(tags, key=lambda value: tuple(map(int, value.split('.'))))
-          own_tag = f'metamod-{tag}'
+          own_tag = f'gameutils-1.8.7-14197-metamod-{tag}'
           url = f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/releases/tags/{own_tag}'
           req = urllib.request.Request(url, headers=headers)
           try:
@@ -80,10 +79,10 @@ jobs:
         run: |
           set -eu
           export DEBIAN_FRONTEND=noninteractive
-          apt-get update -qy
-          apt-get install -y git clang-10 clang++-10 binutils python3 python3-pip zip
+          sudo apt-get update -qy
+          sudo apt-get install -y git clang-14 binutils python3 python3-pip zip
           python3 -m pip install --upgrade pip importlib-metadata
-          python3 -m pip install setuptools==45.2.0
+          python3 -m pip install --upgrade setuptools
           git clone https://github.com/alliedmodders/ambuild.git ambuild
           pip3 install ./ambuild
           mkdir -p external
@@ -91,7 +90,7 @@ jobs:
           git -C "$MMS_PATH" submodule update --init --depth 1 third_party/khook third_party/amtl hl2sdk-manifests
           git init -q "$HL2SDK_ROOT/hl2sdk-cs2"
           git -C "$HL2SDK_ROOT/hl2sdk-cs2" remote add origin https://github.com/alliedmodders/hl2sdk.git
-          git -C "$HL2SDK_ROOT/hl2sdk-cs2" fetch -q --depth 1 origin 625bfd4e39816ad0e1eae3b3144a3b5425c5c7a0
+          git -C "$HL2SDK_ROOT/hl2sdk-cs2" fetch -q --depth 1 origin 81020d1a26b9d4321b9f030c96929ec18e8c0cff
           git -C "$HL2SDK_ROOT/hl2sdk-cs2" checkout -q FETCH_HEAD
           git clone https://github.com/pisex/SchemaEntity.git "$GITHUB_WORKSPACE/../SchemaEntity"
           git -C "$GITHUB_WORKSPACE/../SchemaEntity" checkout -q e7965b3c83ec684d44584ee6457c5482ee5d9db1
@@ -140,9 +139,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.release_tag }}
-          name: CS2 Menus 1.8.7 for Metamod ${{ steps.version.outputs.metamod_tag }}
+          name: GameUtils 1.8.7-14197 for Metamod ${{ steps.version.outputs.metamod_tag }}
           body: |
-            CS2 Menus 1.8.7 built for Metamod:Source ${{ steps.version.outputs.metamod_tag }}.
+            GameUtils 1.8.7-14197 for CS2 1.41.9.7, built for Metamod:Source ${{ steps.version.outputs.metamod_tag }}.
             This compatibility build predates the 1.9.1 HUD layout features.
           files: |
             dist/utils.zip
